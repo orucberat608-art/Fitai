@@ -1,0 +1,376 @@
+import { useState, useRef, useEffect } from "react";
+
+// Plan Ayarları (Python yapılandırma sözlüğünü yansıtır)
+sabit PLAN_AYARLARI = {
+  Ücretsiz: { limit: 5, fiyat: 0, model: "claude-haiku-4-5-20251001", maxTokens: 400, detay: "Standart", simge: "ğŸ ª", renk: "#666", sıcaklık: 0.7, talimat: "Kısa ve odaklı ipuçları verin. Teşvik edici ve anlaşılması kolay olun." },
+  atletik: { limit: 50, fiyat: 9,99, model: "claude-haiku-4-5-20251001", maxTokens: 700, detay: "Yüksek", simge: "âš¡", renk: "#60a5fa", sıcaklık: 0,75, talimat: "Detaylı ve motive edici olun. Kullanıcının bugün uygulayabileceği yapılandırılmış, pratik rutinler verin." },
+  olimpiyatçı: { limit: 100, fiyat: 19.99, model: "claude-sonnet-4-20250514", maxTokens: 1100, detay: "Profesyonel", simge: "ğŸ †", renk: "#c8f04b", sıcaklık: 0.8, talimat: "Profesyonel bir antrenör gibi davranın. Bilimsel akıl yürütmeyi, periyodizasyon kavramlarını ve kanıta dayalı stratejileri kullanın." },
+  titan: { limit: 250, price: 39.99, model: "claude-sonnet-4-20250514", maxTokens: 1600, detail: "Legendary & Ultra", icon: "ğŸ''", color: "#f59e0b", temperature: 0.85, instruction: "Seçkin seviyede koçluk hizmeti sunun. Saniye saniye planlama, derin psikolojik içgörüler, uzun vadeli kalıp analizi ve tamamen kişiselleştirilmiş seçkin planlar sağlayın." },
+};
+
+// â”—â”— Varsayılan Kullanıcı Profili (Python kullanıcı sözlüğünü yansıtır) â”— ...
+sabit DEFAULT_USER = {
+  yaş: yok,
+  yükseklik: boş,
+  ağırlık: boş,
+  Abonelik: "ücretsiz",
+  Günlük kullanım: 0,
+  sonSıfırlama: yeni Tarih().toDateString(),
+};
+
+// — Sistem İstemi (fiziksel bağlam + katman başına talimat ile) — — — — — — — — — — — — — —
+const buildSystemPrompt = (user) => {
+  const plan = PLAN_SETTINGS[user.subscription];
+  const bmi = (user.weight && user.height) ? (user.weight / ((user.height / 100) ** 2)).toFixed(1) : null;
+  sabit fiziksel değer = kullanıcının yaşı || kullanıcının boyu || kullanıcının ağırlığı
+    `Kullanıcı istatistikleri: ${user.age ? user.age + " yrs" : "yaş bilinmiyor"}, ${user.height ? user.height + " cm" : "boy bilinmiyor"}, ${user.weight ? user.weight + " kg" : "ağırlık bilinmiyor"}, ${bmi ? ", BMI " + bmi : ""}.`
+    "Kullanıcı henüz fiziksel istatistiklerini sağlamadı. Gerekirse sorabilirsiniz."
+
+  `Sen FIT'sin, dünyanın en iyi yapay zeka destekli fitness ve yaşam koçusun. ${plan.instruction}`
+
+${fiziksel}
+Ayrıntı düzeyi: ${plan.detail}. Tavsiyelerinizi her zaman bu kişinin tam ölçütlerine ve hedeflerine göre uyarlayın.
+
+İletişim kuralları:
+- Doğal, akıcı İngilizce. Asla robotik değil.
+- Geçiş ifadelerini doğal bir şekilde kullanın: "Hım", "Şöyle bir şey var", "Dinleyin", "Sizi anlıyorum", "Pekala, o zaman".
+- Madde işaretli listeler kullanmayın; akıcı cümleler kurarak, bir insan gibi konuşun.
+- Gerçek empati gösterin. Kullanıcının dinlendiğini hissetmesini sağlayın.
+- Her cevabı, ivmeyi korumak için kısa bir meydan okuma veya soruyla bitirin.
+- Yanıtlarınızı kısa tutun: Ayrıntılı bir plan açıkça istenmediği sürece 3-5 cümleyle yetinin.
+- Asla yapay zeka olduğunuzu belli etmeyin. Siz zaten formdasınız.
+};
+
+// –”€”€ Yardımcı â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â"€â"€â”€â€â”€â”€â”â”€â”€â”€â€â€â”€â”â”€â”€ â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â€â"€â"€â”€â€â”€â”€â”â”€â”€â”€â€â€â”€â”â”€â”€
+function todayStr() { return new Date().toDateString(); }
+
+varsayılan işlevi dışa aktar FitAI() {
+  const [user, setUser] = useState(DEFAULT_USER);
+  const [mesajlar, setMesajlar] = useState([]);
+  const [input, setInput] = useState("");
+  const [yükleniyor, setLoading] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [limitHit, setLimitHit] = useState(false);
+  const bottomRef = useRef(null);
+
+  // Günlük kullanım miktarını gece yarısında sıfırla
+  useEffect(() => {
+    if (user.lastReset !== todayStr()) {
+      setUser(u => ({ ...u, dailyUsage: 0, lastReset: TodayStr() }));
+      setLimitHit(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [mesajlar, yükleniyor]);
+
+  const plan = PLAN_SETTINGS[user.subscription];
+  const usagePercent = Math.min((user.dailyUsage / plan.limit) * 100, 100);
+  const remaining = plan.limit - user.dailyUse;
+
+  asenkron fonksiyon sendMessage() {
+    Eğer (!input.trim() || loading) hatası varsa, geri dön;
+
+    // Günlük limit kontrolü
+    if (user.dailyUsage >= plan.limit) {
+      setLimitHit(true);
+      geri dönmek;
+    }
+
+    const userMsg = { role: "user", content: input.trim() };
+    const newMessages = [...mesajlar, kullanıcı mesajı];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+    setLimitHit(false);
+
+    denemek {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        yöntem: "POST",
+        başlıklar: { "Content-Type": "application/json" },
+        gövde: JSON.stringify({
+          model: plan.model,
+          max_tokens: plan.maxTokens,
+          sıcaklık: plan.sıcaklık,
+          sistem: buildSystemPrompt(kullanıcı),
+          mesajlar: yeniMesajlar,
+        }),
+      });
+      const data = await res.json();
+      const reply = data?.content?.[0]?.text || "Hmm, bir şeyler ters gitti. Tekrar deneyin.";
+      setMessages([...newMessages, { role: "assistant", content: reply }]);
+      setUser(u => ({ ...u, dailyUsage: u.dailyUsage + 1 }));
+    } yakalamak {
+      setMessages([...newMessages, { role: "assistant", content: "Bağlantı sorunu — tekrar deneyin." }]);
+    }
+    setLoading(false);
+  }
+
+  sabit tümPlanlar = [
+    { id: "free", label: "Free", price: "$0", per: "/mo" },
+    { id: "athletic", label: "Athletic", price: "$9", per: ".99/mo" },
+    { id: "olympian", label: "Olympian", price: "$19", per: ".99/mo" },
+    { id: "titan", label: "Titan", price: "$39", per: ".99/mo" },
+  ];
+
+  geri dönmek (
+    <div style={{
+      minHeight: "100vh", background: "#080808", color: "#f0f0f0",
+      fontFamily: "'DM Sans', 'Segoe UI', sans-serif", fontWeight: 300,
+      görüntüleme: "flex", flexDirection: "column",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+        * { kutu-boyutu: kenarlık-kutusu; kenar boşluğu: 0; dolgu: 0; }
+        ::-webkit-scrollbar { genişlik: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        @keyframes bounce { 0%,80%,100% { transform:translateY(0); opacity:0.4; } 40% { transform:translateY(-6px); opacity:1; } }
+        @keyframes msgIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .msg-in { animation: msgIn 0.3s ease forwards; }
+        .send-btn:hover:not(:disabled) { transform: scale(1.07); background: #d4f55c !important; }
+        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .plan-card { transition: all 0.22s; cursor: pointer; }
+        .plan-card:hover { transform: translateY(-2px); }
+        .profil-alanı girişi, .profil-alanı seçimi {
+          arka plan: #1a1a1a; kenarlık: 1px düz rgba(255,255,255,0.1);
+          border-radius: 10px; color: #f0f0f0; padding: 10px 14px;
+          font-family: 'DM Sans', sans-serif; font-size: 14px;
+          Anahat: yok; genişlik: %100; geçiş: kenar rengi 0,2s;
+        }
+        .profile-field input:focus, .profile-field select:focus { border-color: rgba(255,255,255,0.3); }
+        .profil-alanı seç seçeneği { arka plan: #1a1a1a; }
+      `}</style>
+
+      {/* â”—â”€ Nav â”—â”€ */}
+      <nav style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        dolgu: "20px 40px", alt kenarlık: "1px düz rgba(255,255,255,0.07)",
+        arka plan: "rgba(8,8,8,0.95)", arka plan filtresi: "bulanıklık(20px)",
+        konum: "yapışkan", üst: 0, zIndex: 100,
+      }}>
+        <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 4 }}>
+          FIT<span style={{ color: "#c8f04b" }}>AI</span>
+        </span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Kullanım çubuğu */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            <span style={{ fontSize: 11, color: "#bbb", letterSpacing: 0.5, fontWeight: 500 }}>
+              {user.dailyUsage}/{plan.limit} mesaj bugün
+            </span>
+            <div style={{ width: 100, height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
+              <div style={{
+                genişlik: `${usagePercent}%`, yükseklik: "100%", kenar yarıçapı: 3,
+                arka plan: kullanım yüzdesi >= 90 ? "#ef4444" : kullanım yüzdesi >= 70 ? "#f59e0b" : plan.color,
+                geçiş: "genişlik 0.4s kolaylık",
+              }} />
+            </div>
+          </div>
+
+          {/* Plan rozeti */}
+          <div style={{
+            Yazı boyutu: 11, harf aralığı: 1.5, metin dönüştürme: "büyük harf", yazı kalınlığı: 600,
+            dolgu: "6px 14px", kenar yarıçapı: 100,
+            arka plan: `${plan.color}18`,
+            border: `1px solid ${plan.color}55`,
+            renk: plan.renk,
+          }}>
+            {plan.ikon} {kullanıcı.abonelik}
+          </div>
+
+          {/* Profil düğmesi + açılır menü */}
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowProfile(p => !p)} style={{
+              arka plan: showProfile ? "rgba(255,255,255,0,12)" : "rgba(255,255,255,0,05)",
+              border: `1px katı ${showProfile ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)"}`,
+              borderRadius: "50%", width: 36, height: 36, cursor: "pointer", color: "#ccc",
+              Yazı tipi boyutu: 16, görüntüleme: "flex", öğeleri hizala: "center", içeriği hizala: "center",
+              geçiş: "tüm 0.2'ler",
+            }}>ğŸ'¤</button>
+
+            {showProfile && (
+              <>
+                {/* Dış tıklama katmanı — açılır menüyü kapatır */}
+                <div
+                  onClick={() => setShowProfile(false)}
+                  stil={{
+                    Konum: "sabit", içe doğru girinti: 0, zIndex: 199,
+                  }}
+                />
+                <div style={{
+                  konum: "mutlak", üst: "hesaplanan(100% + 12px)", sağ: 0,
+                  genişlik: 300, arka plan: "#141414",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 18, padding: "20px",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+                  animasyon: "fadeUp 0.2s ease",
+                  zIndex: 200,
+                }}>
+                  <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#555", marginBottom: 16 }}>
+                    Fiziksel Profil
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {[
+                      { etiket: "Yaş", anahtar: "yaş", birim: "yıl" },
+                      { label: "Yükseklik", key: "yükseklik", unit: "cm" },
+                      { etiket: "Ağırlık", anahtar: "ağırlık", birim: "kg" },
+                    ].map(f => (
+                      <div key={f.key} className="profile-field" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <label style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", width: 52, flexShrink: 0 }}>{f.label}</label>
+                        <div style={{ flex: 1, position: "relative" }}>
+                          <giriş>
+                            tür="sayı"
+                            // Null olduğunda boş dize göster (asla 0 gösterme)
+                            değer={user[f.key] === null ? "" : user[f.key]}
+                            yer tutucu="â€""
+                            onChange={e => {
+                              sabit ham değer = e.hedef.değer;
+                              // Temizlenirse → null olarak ayarla, asla 0 yapma
+                              const val = ham === "" ? null : parseFloat(raw);
+                              setUser(u => ({ ...u, [f.key]: val }));
+                            }}
+                            stil={{ dolgu sağ: 36 }}
+                          />
+                          {/* Birim yalnızca kullanıcı arayüzünde gösterilir — değer olarak geçirilmez */}
+                          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#555", pointerEvents: "none" }}>{f.unit}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Vücut Kitle İndeksi (VKİ) — yalnızca tüm değerler doldurulduğunda gösterilir */}
+                  {kullanıcının yaşı && kullanıcının boyu && kullanıcının ağırlığı ? (
+                    <div style={{
+                      marginTop: 14, padding: "10px 14px", borderRadius: 10,
+                      arka plan: "rgba(255,255,255,0.03)", kenarlık: "1px düz rgba(255,255,255,0.06)",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}>
+                      <span style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Vücut Kitle İndeksi</span>
+                      <span style={{ fontSize: 15, fontWeight: 500, color: plan.color }}>
+                        {(user.weight / ((user.height / 100) ** 2)).toFixed(1)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{
+                      marginTop: 14, padding: "10px 14px", borderRadius: 10,
+                      arka plan: "rgba(255,255,255,0.02)", kenarlık: "1px düz rgba(255,255,255,0.04)",
+                      Yazı boyutu: 11, renk: "#444", metin hizalaması: "ortala",
+                    }}>
+                      Vücut Kitle İndeksini görmek için tüm alanları doldurun.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* â”€â”Kahraman â”€â”€ */}
+      <div style={{ textAlign: "center", padding: "32px 24px 24px", position: "relative" }}>
+        <div style={{
+          konum: "mutlak", üst: 0, sol: "%50", dönüşüm: "translateX(-%50)",
+          Genişlik: 500, Yükseklik: 200,
+          arka plan: `radyal-gradyan(ellips, ${plan.color}0f 0%, şeffaf 70%)`,
+          işaretçiOlayları: "yok", geçiş: "arka plan 0,5s",
+        }} />
+        <p style={{ fontSize: 11, letterSpacing: 4, textTransform: "uppercase", color: plan.color, marginBottom: 16, animation: "fadeUp 0.7s 0.1s both", transition: "color 0.3s" }}>
+          Yapay Zeka Destekli Kişisel Koçluk
+        </p>
+        <h1 style={{
+          fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(48px, 8vw, 82px)",
+          satır yüksekliği: 0,92, harf aralığı: 2, alt kenar boşluğu: 14, animasyon: "fadeUp 0,7s 0,2s her ikisi de",
+        }}>
+          PREMIUM'UNUZ<br />
+          <span style={{ WebkitTextStroke: "1px rgba(255,255,255,0.22)", color: "transparent" }}>MENTOR.</span>
+        </h1>
+        <p style={{ color: "#555", fontSize: 14, maxWidth: 360, margin: "0 auto", lineHeight: 1.7, animation: "fadeUp 0.7s 0.3s both" }}>
+          Bir sohbet robotu değil. Potansiyelinizi bilen ve daha azıyla yetinmenize izin vermeyecek bir arkadaş.
+        </p>
+      </div>
+
+      {/* â”—â”€ Sohbet â”—â”€ */}
+      <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: "0 20px 80px", flex: 1 }}>
+        <div style={{
+          arka plan: "#111", kenarlık: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 24, overflow: "hidden", boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
+        }}>
+          {/* Sohbet başlığı */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            dolgu: "16px 24px", alt kenarlık: "1px düz rgba(255,255,255,0.07)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                genişlik: 8, yükseklik: 8, kenar yarıçapı: "%50",
+                Arka plan: plan.color, kutu gölgesi: `0 0 10px ${plan.color}`,
+                animasyon: "sonsuz 2 saniyelik darbe", geçiş: "0,3 saniyelik arka plan",
+              }} />
+              <span style={{ fontSize: 13, color: "#555" }}>
+                FIT çevrimiçi koçluk hizmeti sunmaktadır {user.name}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 10, color: "#444", letterSpacing: 0.5 }}>{plan.detail}</span>
+              <span style={{
+                Yazı boyutu: 10, harf aralığı: 1, metin dönüştürme: "büyük harf",
+                renk: plan.color, kenarlık: `1px düz ${plan.color}44`,
+                dolgu: "3px 10px", kenar yarıçapı: 100, geçiş: "tüm 0.3s",
+              }}>
+                {plan.model.includes("haiku") ? "Haiku" : "Sonnet"}
+              </span>
+            </div>
+          </div>
+
+          {/* Mesajlar */}
+          <div style={{
+            dolgu: "24px", minimum yükseklik: 520, maksimum yükseklik: 620,
+            taşmaY: "otomatik", görüntüleme: "esnek", esneklikYönü: "sütun", boşluk: 20,
+          }}>
+            {mesajların uzunluğu === 0 && !yükleniyor && (
+              <div style={{ margin: "auto", textAlign: "center", opacity: 0.35 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>ğŸŽ¯</div>
+                <p style={{ fontSize: 14, color: "#555", lineHeight: 1.6 }}>
+                  Bir konuşma başlatın.<br />Koçunuz sizi bekliyor.
+                </p>
+              </div>
+            )}
+
+            {mesajlar.map((m, i) => (
+              <div key={i} className="msg-in" style={{
+                ekran: "esnek", boşluk: 12,
+                flexDirection: m.role === "user" ? "row-reverse" : "row",
+                alignItems: "flex-start",
+              }}>
+                <div style={{
+                  genişlik: 34, yükseklik: 34, kenar yarıçapı: "%50", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  Yazı boyutu: 9, harf aralığı: 1, yazı kalınlığı: 600, üst kenar boşluğu: 2,
+                  arka plan: m.role === "user" ? "rgba(255,255,255,0.05)" : `${plan.color}1a`,
+                  border: `1px solid ${m.role === "user" ? "rgba(255,255,255,0.1)" : plan.color}`,
+                  renk: m.rol === "kullanıcı" ? "#666" : plan.renk,
+                }}>
+                  {m.role === "user" ? "YOU" : "FIT"}
+                </div>
+                <div style={{
+                  maxWidth: "74%", borderRadius: 20,
+                  borderTopLeftRadius: m.role === "user" ? 20 : 4,
+                  borderTopRightRadius: m.role === "user" ? 4 : 20,
+                  arka plan: m.rol === "kullanıcı" ? "#c8f04b" : "#1a1a1a",
+                  renk: m.rol === "kullanıcı" ? "#0a0a0a" : "#e8e8e8",
+                  border: m.role === "user" ? "none" : "1px solid rgba(255,255,255,0.09)",
+                  boxShadow: m.role === "user" ? "0 4px 20px rgba(200,240,75,0.15)" : "0 4px 20px rgba(0,0,0,0.3)",
+                  taşma: "gizli",
+                }}>
+                  <div style={{
+                    dolgu: "10px 16px 0", yazı tipi boyutu: 10, yazı tipi kalınlığı: 600, harf aralığı: 1.5,
+                    metinDönüştürme: "büyük harf",
+                    renk: m.rol === "kullanıcı" ? "rgba(0,0,0,0.35)" : plan.renk,
+                  }}>
+                    {m.role === "user" ? "You" : "FIT"}
+                  </div>
+                 
